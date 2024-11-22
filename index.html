@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Electron Demo App</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+
+        .sidebar {
+            width: 70px;
+            background-color: #2c3e50;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px 0;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .sidebar-divider {
+            position: absolute;
+            left: 70px;
+            top: 0;
+            width: 1px;
+            height: 100%;
+            background-color: #ddd;
+            z-index: 1;
+        }
+
+        .content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: #f5f5f5;
+        }
+
+
+        .sidebar .icon {
+            width: 100%;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            cursor: pointer;
+            font-size: 24px;
+            transition: background-color 0.3s, transform 0.2s;
+        }
+
+        .sidebar .icon:hover {
+            background-color: #34495e;
+            transform: scale(1.1);
+        }
+
+        .sidebar .icon.active {
+            background-color: #1abc9c;
+            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.3);
+        }
+
+        .tabs {
+            display: flex;
+            align-items: center;
+            background: #ececec;
+            padding: 5px 10px;
+            border-bottom: 1px solid #ddd;
+            box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .tabs button {
+            padding: 8px 15px;
+            margin-right: 8px;
+            background: #f7f7f7;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+            transition: background-color 0.3s, box-shadow 0.2s;
+        }
+
+        .tabs button.active {
+            background: #1abc9c;
+            color: white;
+            border: 1px solid #1abc9c;
+            box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.15);
+        }
+
+        .tabs button .close-btn {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 5px;
+        }
+
+        .tabs button .close-btn:hover {
+            color: #f00;
+        }
+
+        .tabs button:not(.active):hover {
+            background: #e8e8e8;
+        }
+
+        .tab-content {
+            flex: 1;
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #ddd;
+            box-shadow: inset 0px 0px 10px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="sidebar">
+        <div class="icon active" onclick="openTab('Ana Sayfa', 'pages/home.html')">
+            <i class="fas fa-home"></i>
+        </div>
+        <div class="icon" onclick="openTab('Dosyalar', 'pages/files.html')">
+            <i class="fas fa-folder"></i>
+        </div>
+        <div class="icon" onclick="openTab('Ayarlar', 'pages/settings.html')">
+            <i class="fas fa-cog"></i>
+        </div>
+        <div class="icon" onclick="openTab('Yardım', 'pages/help.html')">
+            <i class="fas fa-question-circle"></i>
+        </div>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
+    <div class="content">
+        <div class="tabs" id="tabs"></div>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+        const tabsContainer = document.getElementById('tabs');
+        let tabs = [];
+        let activeTabIndex = null;
+
+        function openTab(title, filePath) {
+            console.log('openTab:', { title, filePath }); 
+
+            if (!filePath) {
+                console.error('filePath is missing or invalid:', filePath);
+                return;
+            }
+
+            const icons = document.querySelectorAll('.sidebar .icon');
+            icons.forEach(icon => icon.classList.remove('active')); 
+            event.target.closest('.icon').classList.add('active'); 
+
+            ipcRenderer.invoke('create-tab', { title, filePath }).then(() => {
+                const existingTab = tabs.find(tab => tab.title === title);
+                if (!existingTab) {
+                    tabs.push({ title });
+                    renderTabs();
+                    switchTab(tabs.length - 1);
+                } else {
+                    switchTab(tabs.indexOf(existingTab));
+                }
+            });
+        }
+
+
+        function switchTab(index) {
+            ipcRenderer.invoke('switch-tab', index).then(() => {
+                activeTabIndex = index;
+                renderTabs();
+            });
+        }
+
+        function closeTab(index) {
+            ipcRenderer.invoke('close-tab', index).then(() => {
+                tabs.splice(index, 1);
+                activeTabIndex = tabs.length > 0 ? Math.max(0, index - 1) : null;
+                renderTabs();
+            });
+        }
+
+        function renderTabs() {
+            tabsContainer.innerHTML = '';
+            tabs.forEach((tab, index) => {
+                const tabElement = document.createElement('button');
+                tabElement.className = `tab ${index === activeTabIndex ? 'active' : ''}`;
+                tabElement.textContent = tab.title;
+                tabElement.onclick = () => switchTab(index);
+
+                const closeBtn = document.createElement('button');
+                closeBtn.className = 'tab close-btn';
+                closeBtn.textContent = 'x';
+                closeBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    closeTab(index);
+                };
+
+                tabElement.appendChild(closeBtn);
+                tabsContainer.appendChild(tabElement);
+            });
+        }
+    </script>
+</body>
+
+</html>
